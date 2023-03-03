@@ -29,6 +29,8 @@ install.packages('png')
 
 #convert the qiime artifacts to phyloseq objects
 ```{r}
+#important information needed:features, tree,& metadata.
+phyObject <- qza_to_phyloseq()
 
 ```
 
