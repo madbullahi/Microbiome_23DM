@@ -105,8 +105,7 @@ plot_richness(phyrar, x = "Treatment" , measures = "Shannon", color = "Day") +
 ```
 
 ```{r}
-a.div_Sh_new <- plot_richness(phyrar, x = "Treatment", measures = "Shannon", color = "Treatment") #+
-  #geom_boxplot() + theme_bw()
+a.div_Sh_new <- plot_richness(phyrar, x = "Treatment", measures = "Shannon", color = "Treatment") 
 ```
 
 
@@ -128,6 +127,7 @@ a.div_Sh_new$data$Treatment <- factor(a.div_Sh_new$data$Treatment, levels = news
 ```{r}
 a.div_Sh_new + geom_boxplot(alpha = 0.6) +
   theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 12))
+
 ```
 
 
