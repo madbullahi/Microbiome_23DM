@@ -1,0 +1,224 @@
+---
+title: "analysis"
+output: Rmarkdown
+author: "Muhammad"
+---
+
+
+```{r}
+#working with data processed from qiime2:
+#metadata, dada2 feature table, taxonomy assignments & rooted-tree(insertion tree)
+```
+
+#load libraries
+```{r}
+library(tidyverse)
+library(qiime2R) # A package for importing qiime artifacts. 
+library(microbiome) # for data analysis and visualisation.
+library(DT)
+library(data.table)
+library(ggpubr)
+library(R2PPT)
+library(RDCOMClient)
+library(png)
+library(vegan)
+library(DESeq2)
+library(viridis)
+library(ggplot2)
+library(phyloseq)
+
+```
+
+
+```{r}
+install.packages('ranacapa')
+```
+
+# convert the qiime artifacts into phyloseq object
+```{r}
+phy <- qza_to_phyloseq(
+  features = "filtered_table.qza",
+  tree = "insertion-tree.qza", "taxonomy.qza",
+  metadata = "Meta.tsv"
+)
+
+```
+
+
+
+```{r}
+phy
+```
+
+# inspect the reads
+```{r}
+summary(sample_sums(phy))
+```
+
+
+```{r}
+colnames(tax_table(phy))
+```
+#plot the rarefaction plot of the reads
+```{r}
+otu_tab <- t(abundances(phy))
+waadp <- vegan::rarecurve(otu_tab,
+                          step = 50,
+                          lwd = 2,
+                          ylab = "ASVs",
+                          label = FALSE,
+                          sample = abline(v=min(rowSums(otu_tab)) ,
+                          col = 'blue',
+                          cex = 0.6))
+
+```
+
+
+#Rarefy the phyloseq object to even depth
+```{r}
+set.seed(9243) #this will help to reproduce the filtering and nomalisation.
+phyrar<- rarefy_even_depth(phy, sample.size = 4896)
+```
+
+```{r}
+phyrar
+```
+
+
+
+```{r}
+#phy_rarefy <- rarefy_even_depth(phy, sample.size = 0.9*min(sample_sums(phy)), replace = F)
+```
+
+#check taxa prevalence at Phylum level
+```{r}
+plot_taxa_prevalence(phyrar, "Phylum") +theme_bw()
+```
+
+#Plot alpha diversity by group
+```{r}
+plot_richness(phyrar, x = "Treatment" , measures = "Shannon", color = "Day") +
+  geom_boxplot()+
+  theme_classic() #+
+  #facet_wrap(~Genotype, scales = "free") +
+  #labs(title = "Shannon_index")
+```
+
+```{r}
+a.div_Sh_new <- plot_richness(phyrar, x = "Treatment", measures = "Shannon", color = "Treatment") #+
+  #geom_boxplot() + theme_bw()
+```
+
+
+#Define new order of variables
+```{r}
+newstorder = c("CO", "ATR", "ARS", "DIC", "PFOS", "WW")
+```
+
+
+```{r}
+# Turn x-axis variable into a character vector.
+#Then turn it back into an ordered factor with the new order (defined in the variable, newstorder)
+
+a.div_Sh_new$data$Treatment <- as.character(a.div_Sh_new$data$Treatment)
+a.div_Sh_new$data$Treatment <- factor(a.div_Sh_new$data$Treatment, levels = newstorder)
+```
+
+
+```{r}
+a.div_Sh_new + geom_boxplot(alpha = 0.6) +
+  theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 12))
+```
+
+
+```{r}
+a.div_Ob <- plot_richness(phyrar, x = "Treatment", measures = "Observed", color = "Treatment") 
+
+```
+
+```{r}
+a.div_Ob$data$Treatment <- as.character(a.div_Ob$data$Treatment)
+a.div_Ob$data$Treatment <- factor(a.div_Ob$data$Treatment, levels = newstorder)
+
+```
+
+
+```{r}
+a.div_Ob + geom_boxplot(alpha = 0.6) +
+ 
+   theme(legend.position = 'none', axis.text.x = 
+           
+           element_text(angle = 45, hjust = 1, vjust = 1, size = 12))
+
+
+
+```
+
+#chech if the measures estimated are normally distributed
+```{r}
+richness <- estimate_richness(phyrar)
+write.csv(richness, file = "alpha_div.csv")
+
+```
+
+```{r}
+head(richness)
+```
+```{r}
+hist(richness$Shannon, main = "Shannon index", xlab = "")
+```
+
+```{r}
+hist(richness$Observed, main = "Observed index", xlab = "")
+
+```
+
+
+```{r}
+#since the reads are normally distributed, lets check if the treatment group impacts SHannon diversity.
+
+anova.sh = aov(richness$Shannon ~sample_data(phyrar)$Treatment)
+
+summary(anova.sh)
+```
+
+```{r}
+#based on the anova result, compute the Tukey Honest Significant Diferences
+
+TukeyHSD(anova.sh)
+```
+```{r}
+kruskal.test(richness$Observed ~ sample_data(phyrar)$Treatment)
+kruskal.test(richness$Shannon ~sample_data(phyrar)$Treatment)
+```
+#export plots to R
+```{r}
+# step 1:
+# create a temporary file FOR the plots
+TEMP_FILE <- paste(tempfile(), ".wmf", sep = "")
+ggsave(TEMP_FILE, plot =a.div_Ob) # Saving the plot
+```
+```{r}
+# Step 2:
+#open a blank powerpoint slide.
+
+mkppt <- PPT.Init(method = "RDCOMClient") # Run once for each R session.
+
+mkppt <- PPT.AddBlankSlide(mkppt)
+```
+
+
+```{r}
+# Step 3:
+# export the graphs to Powerpoint slides.
+mkppt <- PPT.AddGraphicstoSlide(mkppt, file = TEMP_FILE)
+unlink(TEMP_FILE)
+```
+
+```{r}
+
+```
+```{r}
+
+```
+
