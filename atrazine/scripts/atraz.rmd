@@ -20,17 +20,20 @@ library(ggpubr)
 library(R2PPT)
 library(RDCOMClient)
 library(png)
+library(vegan)
+library(DESeq2)
+library(viridis)
 
 ```
 
-```{r}
-install.packages('png')
-```
 
 #convert the qiime artifacts to phyloseq objects
 ```{r}
 #important information needed:features, tree,& metadata.
-phyObject <- qza_to_phyloseq()
+phy_atr <- qza_to_phyloseq( 
+  features = "filtered_table.qza",
+  tree = "insertion-tree.qza","taxonomy.qza",
+  metadata = "met-atr.tsv")
 
 ```
 
