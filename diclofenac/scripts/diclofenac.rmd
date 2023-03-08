@@ -1,0 +1,182 @@
+---
+title: "diclofenac analysis"
+output: Rmarkdown
+author: "Muhammad"
+---
+#load libraries
+```{r}
+library(tidyverse)
+library(qiime2R) # A package for importing qiime2 artifacts. 
+library(microbiome) # for data analysis and visualisation.
+library(DT)
+library(data.table)
+library(ggpubr)
+library(R2PPT)
+library(RDCOMClient)
+library(png)
+library(vegan)
+library(DESeq2)
+library(viridis)
+
+```
+
+
+##convert the qiime artifacts to phyloseq objects.
+```{r}
+#important information needed:features, tree,& #metadata.
+phy_di <- qza_to_phyloseq( 
+  features = "filtered_table.qza",
+  tree = "insertion-tree.qza","taxonomy.qza",
+  metadata = "metadi.tsv")
+
+
+```
+
+
+```{r}
+phy_di
+```
+
+
+```{r}
+#inspect the sample reads.
+
+summary(sample_sums(phy_di))
+```
+
+
+```{r}
+set.seed(9242)# This will help in reproducing the filtering and nomalisation.
+phy_di_rar <- rarefy_even_depth(phy_di, sample.size = 4896)
+```
+
+
+```{r}
+table(tax_table(phy_di_rar)[, "Phylum"], exclude = NULL)
+```
+
+
+```{r}
+#if any phylum has only one feature, consider filtering out.
+
+p_di <- subset_taxa(phy_di_rar, !is.na(Phylum) & !Phylum %in% c("", "NA", "Patescibacteria", "Myxococcota"))
+p_di
+```
+
+
+```{r}
+#compute the prevalence of each OTU and store in a dataframe.
+prevdf_di <- apply(X = otu_table(p_di),
+               MARGIN = ifelse(taxa_are_rows(p_di), yes = 1, no = 2),
+               FUN = function(OTU){sum(OTU > 0)})
+```
+
+
+
+```{r}
+#Add taxonomy and total read counts to this dataframe.
+
+prevdf_di <- data.frame(Prevalence = prevdf_di,
+                    TotalAbundance = taxa_sums(p_di),
+                    tax_table(p_di))
+```
+
+
+```{r}
+#Define prevalence threshold as 5% of total samples
+prevalenceThreshold <- 0.05 * nsamples(p_di)
+
+```
+
+
+```{r}
+#execute the prevalence filter using the prune_taxa() function.
+
+kipTaxa <- rownames(prevdf_di)[(prevdf_di$Prevalence >= prevalenceThreshold)]
+di_rar <- prune_taxa(kipTaxa, p_di)
+di_rar
+```
+
+
+```{r}
+merge_less_than_top_di <- function(di_rar, top = 10) {transformed <- transform_sample_counts(di_rar, function(OTU) OTU/sum(OTU))
+otu.table <- as.data.frame(otu_table(transformed))
+otu.sort <- otu.table[order(rowMeans(otu.table), decreasing = TRUE),]
+otu.list <- row.names(otu.sort[(top + 1):nrow(otu.sort),])
+merged <- merge_taxa(transformed, otu.list, 1)
+for(i in 1:dim(tax_table(merged))[1]){
+  if (is.na(tax_table(merged)[i,2])){
+    taxa_names(merged)[i] <- "Other"
+    tax_table(merged)[i, 1:6] <- "Other" 
+  }
+}
+  return(merged)
+}
+```
+
+
+
+```{r}
+di_gen <-tax_glom(di_rar, "Genus")
+```
+
+
+```{r}
+di_gen_top10 <- merge_less_than_top_di(di_gen, top = 10)
+
+```
+
+
+```{r}
+#convert into a dataframe.
+tax_rel_abun_di_gen_top10 <-psmelt(di_gen_top10)%>%
+  filter(Abundance > 0.02) %>%
+  arrange(Genus)
+
+```
+
+
+
+```{r}
+di<- ggplot(
+  tax_rel_abun_di_gen_top10, aes(x = Day, y = Abundance, fill = Genus)
+)+
+  facet_grid(~Genotype*Treatment, scales = "free")+
+  geom_bar(stat = "identity", position = "fill")+
+  labs(x="Day", y="Rel. Abun", title = "Genus relative abundance") +
+   theme(
+    axis.text.x = element_text(size = 10, 
+    angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    strip.text = element_text(size = 8)
+  )
+```
+
+```{r}
+di
+```
+
+
+```{r}
+tax_rel_abun_di_gen_top10 %>%
+  mutate(Genus_di = case_when(is.na(Genus) ~ "Other", TRUE ~ as.character(Genus))) %>% #this part changes everything that's uncharacterised to be called other
+  #filter(Abundance > 0.01) %>% # filter out anything less than 2% abundance
+  ggplot(aes(Day,
+             Genus_di, color =
+               Genus_di)) +
+  geom_point(aes(size = 
+                   Abundance, 
+                 fill = Genus_di)) + #when size = Abundance, it changes the size to depend on the relative abundance in the dataframe.
+facet_grid(~Genotype*Treatment) +
+  labs(x="Day", y="Rel. Abun", title = "Genus relative abundance") +
+   theme(
+    axis.text.x = element_text(size = 10, 
+    angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    strip.text = element_text(size = 8)
+  )
+
+```
+
