@@ -2,14 +2,153 @@
 author:"Muhammad"
 title: "Arsenic_analysis"
 output: "Rmarkdown"
+---
 
-# Phyloseq
+#load packages
+```{r}
+library(tidyverse)
+library(qiime2R) # A package for importing qiime artifacts. 
+library(microbiome) # for data analysis and visualisation.
+library(DT)
+library(data.table)
+library(ggpubr)
+library(R2PPT)
+library(RDCOMClient)
+library(png)
+library(vegan)
+library(DESeq2)
+library(viridis)
+
+```
+
+##convert the qiime artifacts to phyloseq objects
+```{r}
+#important information needed:features, tree,& #metadata.
+phy_ar <- qza_to_phyloseq( 
+  features = "filtered_table.qza",
+  tree = "insertion-tree.qza","taxonomy.qza",
+  metadata = "metar.tsv")
+
+```
+
+
+```{r}
+phy_ar
+```
+
+
+#visualise the composition of the samples
+```{r}
+#inspect the sample reads.
+
+summary(sample_sums(phy_ar))
+```
+
+```{r}
+set.seed(9242)# This will help in reproducing the filtering and nomalisation.
+phy_ar_rar <- rarefy_even_depth(phy_ar, sample.size = 4896)
+```
+
+```{r}
+table(tax_table(phy_ar_rar)[, "Phylum"], exclude = NULL)
+```
+
+
+```{r}
+#if any phylum has only one feature, consider filtering out.
+
+p_ar <- subset_taxa(phy_ar_rar, !is.na(Phylum) & !Phylum %in% c("", "NA", "Chloroflexi", "Myxococcota"))
+p_ar
+```
+
+```{r}
+#compute the prevalence of each OTU and store in a dataframe
+prevdf_ar <- apply(X = otu_table(p_ar),
+               MARGIN = ifelse(taxa_are_rows(p_ar), yes = 1, no = 2),
+               FUN = function(OTU){sum(OTU > 0)})
+```
+
+
+```{r}
+#Add taxonomy and total read counts to this dataframe.
+
+prevdf_ar <- data.frame(Prevalence = prevdf_ar,
+                    TotalAbundance = taxa_sums(p_ar),
+                    tax_table(p_ar))
+```
+
+
+```{r}
+#Define prevalence threshold as 5% of total samples
+prevalenceThreshold <- 0.05 * nsamples(p_ar)
+```
+
+
+```{r}
+#execute the prevalence filter using the prune_taxa() function.
+
+keeppTaxa <- rownames(prevdf_ar)[(prevdf_ar$Prevalence >= prevalenceThreshold)]
+ars_rar <- prune_taxa(keepTaxa, p_ar)
+ars_rar
+```
+
+
+```{r}
+merge_less_than_top_ars <- function(ars_rar, top = 10) {transformed <- transform_sample_counts(ars_rar, function(OTU) OTU/sum(OTU))
+otu.table <- as.data.frame(otu_table(transformed))
+otu.sort <- otu.table[order(rowMeans(otu.table), decreasing = TRUE),]
+otu.list <- row.names(otu.sort[(top + 1):nrow(otu.sort),])
+merged <- merge_taxa(transformed, otu.list, 1)
+for(i in 1:dim(tax_table(merged))[1]){
+  if (is.na(tax_table(merged)[i,2])){
+    taxa_names(merged)[i] <- "Other"
+    tax_table(merged)[i, 1:6] <- "Other" 
+  }
+}
+  return(merged)
+}
+```
+
+
+
+```{r}
+ars_gen <-tax_glom(ars_rar, "Genus")
+```
+
+
+```{r}
+ars_gen_top10 <- merge_less_than_top_ars(ars_gen, top = 10)
+
+```
+
+```{r}
+#convert into a dataframe.
+tax_rel_abun_ars_gen_top10 <-psmelt(ars_gen_top10)%>%
+  filter(Abundance > 0.02) %>%
+  arrange(Genus)
+
+```
+
+
+```{r}
+ars<- ggplot(
+  tax_rel_abun_ars_gen_top10, aes(x = Day, y = Abundance, fill = Genus)
+)+
+  facet_grid(~Genotype*Treatment, scales = "free")+
+  geom_bar(stat = "identity", position = "fill")+
+  labs(x="Day", y="Rel. Abun", title = "Genus relative abundance") +
+   theme(
+    axis.text.x = element_text(size = 10, 
+    angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    strip.text = element_text(size = 8)
+  )
+```
+
+
+
 ```{r}
 
 ```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
