@@ -1,5 +1,5 @@
 ---
-title: "diclofenac analysis"
+title: "pfosanalysis"
 output: Rmarkdown
 author: "Muhammad"
 ---
@@ -80,8 +80,8 @@ prevdf_pf <- data.frame(Prevalence = prevdf_pf,
 
 
 ```{r}
-#Define prevalence threshold as 5% of total samples
-prevalenceThreshold <- 0.05 * nsamples(p_pfos)
+#Define prevalence threshold as 1% of total samples
+prevalenceThreshold <- 0.001 * nsamples(p_pfos)
 
 ```
 
@@ -128,7 +128,7 @@ pf_gen_top10 <- merge_less_than_top_pf(pf_gen, top = 10)
 ```{r}
 #convert into a dataframe.
 tax_rel_abun_pf_gen_top10 <-psmelt(pf_gen_top10)%>%
-  filter(Abundance > 0.02) %>%
+  filter(Abundance > 0.001) %>%
   arrange(Genus)
 
 ```
@@ -153,5 +153,86 @@ pf<- ggplot(
 
 ```{r}
 pf
+```
+
+
+```{r}
+tax_rel_abun_pf_gen_top10 %>%
+  mutate(Genus_pf = case_when(is.na(Genus) ~ "Other", TRUE ~ as.character(Genus))) %>% #this part changes everything that's uncharacterised to be called other
+  #filter(Abundance > 0.01) %>% # filter out anything less than 2% abundance
+  ggplot(aes(Day,
+             Genus_pf, color =
+               Genus_pf)) +
+  geom_point(aes(size = 
+                   Abundance, 
+                 fill = Genus_pf)) + #when size = Abundance, it changes the size to depend on the relative abundance in the dataframe.
+facet_grid(~Genotype*Treatment) +
+  labs(x="Day", y="Rel. Abun", title = "Genus relative abundance") +
+   theme(
+    axis.text.x = element_text(size = 10, 
+    angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    strip.text = element_text(size = 8)
+  )
+
+```
+
+```{r}
+#beta-diversity metrics: Non-phylogenetic beta diversity.
+
+dist_p <- phyloseq::distance(
+phy_pf_rar, method = "bray")
+ordination <- ordinate(phy_pf_rar, method = "PCoA",
+                       distance = dist_p)
+b.div.bray_p <-plot_ordination(phy_pf_rar, ordination,type = "samples", shape = "Treatment", color = "Genotype", title = "PCoA; taxa(Genus)")+
+  scale_color_manual(values = c("LR2_36_1" ="black", "LRV_0_1" ="red", "LRV_12_3" ="blue" , "LRV_8-5_3" ="green")) +
+  geom_point(aes(color = "grey90"), alpha = 0.7, size = 3.5)
+```
+
+```{r}
+print(b.div.bray_p)
+```
+
+
+```{r}
+#Phylogenetic beta diversity metrics.
+
+p_rel <- microbiome::transform(phy_pf, "compositional") # first transform the phyloseq object
+```
+
+
+```{r}
+p.ord.wuni <- ordinate(p_rel, "PCoA", "unifrac", weighted = T)
+```
+
+```{r}
+b.div.wuni <- plot_ordination(p_rel, p.ord.wuni, type = "samples", color = "Genotype", title = "PCoA; taxa(Genus)")+
+  geom_point( size = 3.5)
+```
+
+```{r}
+print(b.div.wuni)
+```
+
+```{r}
+#Permanova
+
+otu <- abundances(p_rel)
+meta <- meta(p_rel)
+
+```
+
+```{r}
+permanova_p <-
+adonis2(t(otu)~Treatment*Day*Genotype+(1/Genotype/Replicates), data = meta, strata = meta$Replicates, permutations = 99, method = "bray")
+```
+
+```{r}
+permanova_p
+```
+
+```{r}
+capture.output(permanova_p, file = "permanova.txt")
 ```
 

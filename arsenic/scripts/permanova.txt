@@ -1,0 +1,30 @@
+Permutation test for adonis under reduced model
+Terms added sequentially (first to last)
+Blocks:  strata 
+Permutation: free
+Number of permutations: 99
+
+adonis2(formula = t(otu) ~ Treatment * Day * Genotype + (1/Genotype/Replicates), data = meta, permutations = 99, method = "bray", strata = meta$Replicates)
+                       Df SumOfSqs      R2
+Treatment               1   0.6345 0.04097
+Day                     2   0.9437 0.06094
+Genotype                3   1.8639 0.12035
+Treatment:Day           2   0.7128 0.04603
+Treatment:Genotype      3   0.8755 0.05653
+Day:Genotype            6   1.1413 0.07369
+Treatment:Day:Genotype  6   1.2126 0.07829
+Residual               43   8.1032 0.52321
+Total                  66  15.4875 1.00000
+                            F Pr(>F)   
+Treatment              3.3669   0.01 **
+Day                    2.5040   0.02 * 
+Genotype               3.2969   0.01 **
+Treatment:Day          1.8913   0.06 . 
+Treatment:Genotype     1.5487   0.06 . 
+Day:Genotype           1.0094   0.47   
+Treatment:Day:Genotype 1.0724   0.28   
+Residual                               
+Total                                  
+---
+Signif. codes:  
+0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
