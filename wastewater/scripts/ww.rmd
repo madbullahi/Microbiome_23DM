@@ -1,0 +1,239 @@
+---
+title: "wastewater analysis"
+output: Rmarkdown
+author: "Muhammad"
+---
+
+#load packages.
+```{r}
+library(tidyverse)
+library(qiime2R) # A package for importing qiime2 artifacts. 
+library(microbiome) # for data analysis and visualisation.
+library(DT)
+library(data.table)
+library(ggpubr)
+library(R2PPT)
+library(RDCOMClient)
+library(png)
+library(vegan)
+library(DESeq2)
+library(viridis)
+
+```
+
+#convert the qiime artifacts to phyloseq object.
+```{r}
+#important information needed:features, tree,& #metadata.
+phy_ww <- qza_to_phyloseq( 
+  features = "filtered_table.qza",
+  tree = "insertion-tree.qza","taxonomy.qza",
+  metadata = "metaWW.tsv")
+
+```
+
+
+```{r}
+phy_ww
+```
+
+
+```{r}
+#inspect the sample reads.
+
+summary(sample_sums(phy_ww))
+
+```
+
+
+```{r}
+set.seed(9242)# This will help in reproducing the filtering and nomalisation.
+phy_ww_rar <- rarefy_even_depth(phy_ww, sample.size = 4896)
+```
+
+```{r}
+table(tax_table(phy_ww_rar)[, "Phylum"], exclude = NULL)
+```
+
+```{r}
+#if any phylum has only one feature, consider filtering out.
+
+p_ww <- subset_taxa(phy_ww_rar, !is.na(Phylum) & !Phylum %in% c("", "NA", "Nitrospirota", "Dependentiae", "Elusimicrobiota", "Acidobacteriota"))
+p_ww
+```
+
+```{r}
+#compute the prevalence of each OTU and store in a dataframe.
+prevdf_ww <- apply(X = otu_table(p_ww),
+               MARGIN = ifelse(taxa_are_rows(p_ww), yes = 1, no = 2),
+               FUN = function(OTU){sum(OTU > 0)})
+```
+
+
+```{r}
+#Add taxonomy and total read counts to this dataframe.
+
+prevdf_ww <- data.frame(Prevalence = prevdf_ww,
+                    TotalAbundance = taxa_sums(p_ww),
+                    tax_table(p_ww))
+```
+
+```{r}
+#Define prevalence threshold as 1% of total samples
+prevalenceThreshold <- 0.001 * nsamples(p_ww)
+
+
+```
+
+
+```{r}
+#execute the prevalence filter using the prune_taxa() function.
+
+kiipTaxa <- rownames(prevdf_ww)[(prevdf_ww$Prevalence >= prevalenceThreshold)]
+ww_filt <- prune_taxa(kiipTaxa, p_ww)
+ww_filt
+```
+
+
+```{r}
+merge_less_than_top_ww <- function(ww_filt, top = 10) {transformed <- transform_sample_counts(ww_filt, function(OTU) OTU/sum(OTU))
+otu.table <- as.data.frame(otu_table(transformed))
+otu.sort <- otu.table[order(rowMeans(otu.table), decreasing = TRUE),]
+
+otu.list <- row.names(otu.sort[(top + 1):nrow(otu.sort),])
+merged <- merge_taxa(transformed, otu.list, 1)
+for(i in 1:dim(tax_table(merged))[1]){
+  if (is.na(tax_table(merged)[i,2])){
+    taxa_names(merged)[i] <- "Other"
+    tax_table(merged)[i, 1:6] <- "Other" 
+  }
+}
+  return(merged)
+}
+```
+
+
+
+
+
+```{r}
+ww_gen <-tax_glom(ww_filt, "Genus")
+```
+
+
+```{r}
+ww_gen_top10 <- merge_less_than_top_ww(ww_gen, top = 10)
+
+```
+
+
+```{r}
+#convert into a dataframe.
+tax_rel_abun_ww_gen_top10 <-psmelt(ww_gen_top10)%>%
+  filter(Abundance > 0.001) %>%
+  arrange(Genus)
+
+```
+
+```{r}
+ww <- ggplot(
+  tax_rel_abun_ww_gen_top10, aes(x = Day, y = Abundance, fill = Genus)
+)+
+  facet_grid(~Genotype*Treatment, scales = "free")+
+  geom_bar(stat = "identity", position = "fill")+
+  labs(x="Day", y="Rel. Abun", title = "Genus relative abundance") +
+   theme(
+    axis.text.x = element_text(size = 10, 
+    angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    strip.text = element_text(size = 8)
+  )
+```
+
+```{r}
+ww
+```
+
+```{r}
+tax_rel_abun_ww_gen_top10 %>%
+  mutate(Genus_ww = case_when(is.na(Genus) ~ "Other", TRUE ~ as.character(Genus))) %>% #this part changes everything that's uncharacterised to be called other
+  #filter(Abundance > 0.01) %>% # filter out anything less than 2% abundance
+  ggplot(aes(Day,
+             Genus_ww, color =
+               Genus_ww)) +
+  geom_point(aes(size = 
+                   Abundance, 
+                 fill = Genus_ww)) + #when size = Abundance, it changes the size to depend on the relative abundance in the dataframe.
+facet_grid(~Genotype*Treatment) +
+  labs(x="Day", y="Rel. Abun", title = "Genus relative abundance") +
+   theme(
+    axis.text.x = element_text(size = 10, 
+    angle = 90, vjust = 0.5, hjust = 1),
+    axis.text.y = element_text(size = 8),
+    legend.text = element_text(size = 8),
+    strip.text = element_text(size = 8)
+  )
+
+```
+
+```{r}
+#beta-diversity metrics: Non-phylogenetic beta diversity.
+
+dist_ww <- phyloseq::distance(
+phy_ww_rar, method = "bray")
+ordination <- ordinate(phy_ww_rar, method = "PCoA",
+                       distance = dist_ww)
+b.div.bray_ww <-plot_ordination(phy_ww_rar, ordination,type = "samples", shape = "Treatment", color = "Genotype", title = "PCoA; taxa(Genus)")+
+  scale_color_manual(values = c("LR2_36_1" ="black", "LRV_0_1" ="red", "LRV_12_3" ="blue" , "LRV_8-5_3" ="green")) +
+  geom_point(aes(color = "grey90"), alpha = 0.7, size = 3.5)
+```
+
+```{r}
+print(b.div.bray_ww)
+```
+
+
+```{r}
+#Phylogenetic beta diversity metrics.
+
+ww_rel <- microbiome::transform(phy_ww, "compositional") # first transform the phyloseq object
+```
+
+
+```{r}
+p.ord.wuni <- ordinate(ww_rel, "PCoA", "unifrac", weighted = T)
+```
+
+```{r}
+b.div.wuni <- plot_ordination(ww_rel, p.ord.wuni, type = "samples", color = "Genotype", title = "PCoA; taxa(Genus)")+
+  geom_point( size = 3.5)
+```
+
+```{r}
+print(b.div.wuni)
+```
+
+
+```{r}
+#Permanova
+
+otu <- abundances(ww_rel)
+meta <- meta(ww_rel)
+
+```
+
+
+```{r}
+permanova_ww <-
+adonis2(t(otu)~Treatment*Day*Genotype+(1/Genotype/Replicates), data = meta, strata = meta$Replicates, permutations = 99, method = "bray")
+```
+
+```{r}
+permanova_ww
+```
+
+```{r}
+capture.output(permanova_ww, file = "permanova.txt")
+
+```
+
