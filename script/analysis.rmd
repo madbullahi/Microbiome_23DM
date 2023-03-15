@@ -30,9 +30,6 @@ library(phyloseq)
 ```
 
 
-```{r}
-install.packages('ranacapa')
-```
 
 # convert the qiime artifacts into phyloseq object
 ```{r}
@@ -84,6 +81,9 @@ phyrar<- rarefy_even_depth(phy, sample.size = 4896)
 phyrar
 ```
 
+```{r}
+summary(sample_sums(phyrar))
+```
 
 
 ```{r}
@@ -96,13 +96,6 @@ plot_taxa_prevalence(phyrar, "Phylum") +theme_bw()
 ```
 
 #Plot alpha diversity by group
-```{r}
-plot_richness(phyrar, x = "Treatment" , measures = "Shannon", color = "Day") +
-  geom_boxplot()+
-  theme_classic() #+
-  #facet_wrap(~Genotype, scales = "free") +
-  #labs(title = "Shannon_index")
-```
 
 ```{r}
 a.div_Sh_new <- plot_richness(phyrar, x = "Treatment", measures = "Shannon", color = "Treatment") 
@@ -154,6 +147,51 @@ a.div_Ob + geom_boxplot(alpha = 0.6) +
 
 ```
 
+# Simpson index
+```{r}
+a.div_evn <- plot_richness(phyrar, x = "Treatment", measures = "Simpson", color = "Treatment") 
+
+```
+
+
+
+```{r}
+a.div_evn$data$Treatment <- as.character(a.div_evn$data$Treatment)
+a.div_evn$data$Treatment <- factor(a.div_evn$data$Treatment, levels = newstorder)
+
+```
+
+```{r}
+a.div_evn + geom_boxplot(alpha = 0.6) +
+ 
+   theme(legend.position = 'none', axis.text.x = 
+           
+           element_text(angle = 45, hjust = 1, vjust = 1, size = 12))
+
+```
+#Invsimpson
+```{r}
+a.div_evn_Inv <- plot_richness(phyrar, x = "Treatment", measures = "invsimpson", color = "Treatment") 
+
+```
+
+
+```{r}
+a.div_evn_Inv$data$Treatment <- as.character(a.div_evn_Inv$data$Treatment)
+a.div_evn_Inv$data$Treatment <- factor(a.div_evn_Inv$data$Treatment, levels = newstorder)
+
+```
+
+
+```{r}
+a.div_evn_Inv + geom_boxplot(alpha = 0.6) +
+ 
+   theme(legend.position = 'none', axis.text.x = 
+           
+           element_text(angle = 45, hjust = 1, vjust = 1, size = 12))
+
+```
+
 #chech if the measures estimated are normally distributed
 ```{r}
 richness <- estimate_richness(phyrar)
@@ -169,8 +207,8 @@ hist(richness$Shannon, main = "Shannon index", xlab = "")
 ```
 
 ```{r}
-hist(richness$Observed, main = "Observed index", xlab = "")
 
+hist(richness$InvSimpson, main = "Invsimpson index", xlab = "")
 ```
 
 
@@ -183,42 +221,64 @@ summary(anova.sh)
 ```
 
 ```{r}
-#based on the anova result, compute the Tukey Honest Significant Diferences
+#based on the anova result, compute the Tukey Honest Significant Differences.
 
 TukeyHSD(anova.sh)
 ```
 ```{r}
+#observed richness
 kruskal.test(richness$Observed ~ sample_data(phyrar)$Treatment)
-kruskal.test(richness$Shannon ~sample_data(phyrar)$Treatment)
-```
-#export plots to R
-```{r}
-# step 1:
-# create a temporary file FOR the plots
-TEMP_FILE <- paste(tempfile(), ".wmf", sep = "")
-ggsave(TEMP_FILE, plot =a.div_Ob) # Saving the plot
-```
-```{r}
-# Step 2:
-#open a blank powerpoint slide.
 
-mkppt <- PPT.Init(method = "RDCOMClient") # Run once for each R session.
+#shannon
+kruskal.test(richness$Shannon~sample_data(phyrar)$Treatment)
 
-mkppt <- PPT.AddBlankSlide(mkppt)
-```
+#simpson
+kruskal.test(richness$Simpson ~sample_data(phyrar)$Treatment)
 
-
-```{r}
-# Step 3:
-# export the graphs to Powerpoint slides.
-mkppt <- PPT.AddGraphicstoSlide(mkppt, file = TEMP_FILE)
-unlink(TEMP_FILE)
+#invsimpson
+kruskal.test(richness$InvSimpson ~sample_data(phyrar)$Treatment)
 ```
 
 ```{r}
+#shannon
+kruskal.test(richness$Shannon~sample_data(phyrar)$Treatment)
 
 ```
 ```{r}
+#invsimpson
+kruskal.test(richness$InvSimpson ~sample_data(phyrar)$Treatment)
+```
 
+```{r}
+#simpson
+kruskal.test(richness$Simpson ~sample_data(phyrar)$Treatment)
+
+```
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("ANCOMBC")
+```
+```{r}
+install.packages("rlang")
+```
+
+#Differential abundance analysis
+```{r}
+library(ANCOMBC)
+```
+
+
+```{r}
+ps <- phy
+```
+
+```{r}
+#To test the differences at OTU level between Genotypes using ancombc2, we need to convert the Genotype colum into a factor.
+
+sample_data(ps)$Genotype <-as.factor(sample_data(ps)$Genotype)
+```
+
+```{r}
 ```
 

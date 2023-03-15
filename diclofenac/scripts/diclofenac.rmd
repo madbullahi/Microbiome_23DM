@@ -83,8 +83,8 @@ prevdf_di <- data.frame(Prevalence = prevdf_di,
 
 
 ```{r}
-#Define prevalence threshold as 5% of total samples
-prevalenceThreshold <- 0.05 * nsamples(p_di)
+#Define prevalence threshold as 1% of total samples
+prevalenceThreshold <- 0.001 * nsamples(p_di)
 
 ```
 
@@ -130,7 +130,7 @@ di_gen_top10 <- merge_less_than_top_di(di_gen, top = 10)
 ```{r}
 #convert into a dataframe.
 tax_rel_abun_di_gen_top10 <-psmelt(di_gen_top10)%>%
-  filter(Abundance > 0.02) %>%
+  filter(Abundance > 0.001) %>%
   arrange(Genus)
 
 ```
@@ -177,6 +177,56 @@ facet_grid(~Genotype*Treatment) +
     legend.text = element_text(size = 8),
     strip.text = element_text(size = 8)
   )
+
+```
+
+
+```{r}
+#beta-diversity metrics: Non-phylogenetic beta diversity.
+
+dist_dic <- phyloseq::distance(
+phy_di_rar, method = "bray")
+ordination <- ordinate(phy_di_rar, method = "PCoA",
+                       distance = dist_dic)
+b.div.bray_dic <-plot_ordination(phy_di_rar, ordination,type = "samples", shape = "Treatment", color = "Genotype", title = "PCoA; taxa(Genus)")+
+  scale_color_manual(values = c("LR2_36_1" ="black", "LRV_0_1" ="red", "LRV_12_3" ="blue" , "LRV_8-5_3" ="green")) +
+  geom_point(aes(color = "grey90"), alpha = 0.7, size = 3.5)
+```
+
+```{r}
+print(b.div.bray_dic)
+```
+
+```{r}
+#Phylogenetic beta diversity metrics.
+
+dic_rel <- microbiome::transform(phy_di, "compositional") # first transform the phyloseq object
+```
+
+
+```{r}
+dic.ord.wuni <- ordinate(dic_rel, "PCoA", "unifrac", weighted = T)
+```
+
+```{r}
+b.div.wuni <- plot_ordination(dic_rel, dic.ord.wuni, type = "samples", color = "Genotype", title = "PCoA; taxa(Genus)")+
+  geom_point( size = 3.5)
+```
+
+```{r}
+print(b.div.wuni)
+```
+
+```{r}
+#Permanova
+
+otu <- abundances(dic_rel)
+meta <- meta(dic_rel)
+
+```
+
+
+```{r}
 
 ```
 
